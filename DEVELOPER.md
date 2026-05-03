@@ -5,10 +5,10 @@
 | Layer | Tech |
 |-------|------|
 | Framework | Next.js 15 (App Router) |
-| Database | SQLite via `better-sqlite3` |
+| Database | SQLite via `node:sqlite` (Node.js built-in) |
 | Auth | `iron-session` (encrypted cookie) |
 | UI | shadcn/ui + Tailwind CSS |
-| Runtime | Node.js 20 Alpine (standalone output) |
+| Runtime | Node.js 22 Alpine (standalone output) |
 
 ## Local Dev
 
@@ -66,10 +66,10 @@ src/
 - **`src/lib/auth.ts`** — `requireAuth()` and `requireAdmin()` throw `UNAUTHORIZED`/`FORBIDDEN` — caught by `apiError()` in utils
 - **`src/lib/registry-client.ts`** — handles pagination (`Link` header), bearer token challenge/retry, and manifest v2 for image sizes
 
-## Docker Build
+## Docker Build (Local)
 
 ```bash
-# Build
+# Build image locally
 docker build -t registry-ui:dev .
 
 # Run
@@ -80,14 +80,77 @@ docker run -p 3000:3000 \
   -e APP_SECRET=$(openssl rand -hex 32) \
   registry-ui:dev
 
-# Or with compose
+# Or with compose (builds + starts in one step)
 docker compose up --build
 ```
 
-## Publish to Docker Hub
+## Release Process
+
+### 1. Commit and push code
 
 ```bash
-# Tag and push manually
+git add .
+git commit -m "feat: your change"
+git push origin main
+```
+
+### 2. Tag the release
+
+Tags trigger the GitHub Actions CI build. Use [semver](https://semver.org) with a `v` prefix.
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+CI runs at `.github/workflows/docker-publish.yml`. It:
+- Builds multi-arch image (`linux/amd64` + `linux/arm64`)
+- Pushes three tags to Docker Hub:
+  - `byteoath/registry-ui:1.0.0`
+  - `byteoath/registry-ui:1.0`
+  - `byteoath/registry-ui:latest`
+
+### 3. Subsequent releases
+
+Bump the version in each new release. Follow [semver](https://semver.org):
+- Bug fix → `v1.0.1`
+- New feature → `v1.1.0`
+- Breaking change → `v2.0.0`
+
+```bash
+# make changes, then:
+git add .
+git commit -m "fix: description of change"
+git push origin main
+
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+Each new tag triggers a fresh CI build and updates `latest` on Docker Hub automatically.
+
+### 4. Required GitHub secrets
+
+Set these **once** in **GitHub → repo → Settings → Secrets and variables → Actions**:
+
+| Secret | Value |
+|--------|-------|
+| `DOCKERHUB_USERNAME` | `byteoath` |
+| `DOCKERHUB_TOKEN` | Docker Hub access token — **must have Read, Write, Delete scope** |
+
+Generate token: [Docker Hub](https://hub.docker.com) → **Account Settings → Personal access tokens → Generate new token** → select **Read, Write, Delete**.
+
+> If CI fails with `401 Unauthorized` or `insufficient scopes`, regenerate the token with all three scopes and update the GitHub secret.
+
+---
+
+### Manual publish (no CI)
+
+If GitHub Actions is not set up yet, push directly:
+
+```bash
+docker login   # enter byteoath credentials
+
 docker build \
   -t byteoath/registry-ui:1.0.0 \
   -t byteoath/registry-ui:latest .
@@ -96,16 +159,16 @@ docker push byteoath/registry-ui:1.0.0
 docker push byteoath/registry-ui:latest
 ```
 
-Once GitHub is connected, pushing a version tag triggers CI automatically:
+For multi-arch on Apple Silicon (M-series):
 
 ```bash
-git tag v1.0.0
-git push --tags
-# GitHub Actions builds multi-arch (amd64 + arm64) and pushes to Docker Hub
+docker buildx create --use --name multiarch
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -t byteoath/registry-ui:1.0.0 \
+  -t byteoath/registry-ui:latest \
+  --push .
 ```
-
-CI workflow: `.github/workflows/docker-publish.yml`
-Required GitHub secrets: `DOCKERHUB_USERNAME=byteoath`, `DOCKERHUB_TOKEN`
 
 ## Docker Registry Notes
 
