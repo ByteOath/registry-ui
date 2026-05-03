@@ -1,0 +1,17 @@
+services:
+  app:
+    build: .
+    image: byteoath/registry-ui:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - registry-ui-data:/data
+    environment:
+      DB_PATH: /data/registry-ui.db
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
+      APP_SECRET: ${APP_SECRET:-change-this-secret-must-be-32-chars!!}
+    restart: unless-stopped
+
+volumes:
+  registry-ui-data:

@@ -1,0 +1,23 @@
+# deps
+node_modules/
+
+# Ide
+.idea/
+.vscode/
+
+# next
+.next/
+out/
+
+# env
+.env
+.env.local
+.env.production
+
+# data
+data/
+*.db
+
+# misc
+.DS_Store
+*.log
