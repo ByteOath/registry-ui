@@ -8,7 +8,10 @@ let _db: DatabaseSync | null = null
 export function getDb(): DatabaseSync {
   if (_db) return _db
 
-  const dbPath = process.env.DB_PATH || path.join(process.cwd(), 'data', 'registry-ui.db')
+  const dbPath = process.env.DB_PATH ||
+    (process.env.NODE_ENV === 'production'
+      ? '/data/registry-ui.db'
+      : path.join(process.cwd(), 'data', 'registry-ui.db'))
   const dir = path.dirname(dbPath)
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
 
