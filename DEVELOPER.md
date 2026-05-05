@@ -343,73 +343,87 @@ docker compose up --build
 
 ## Release Process
 
-### 1. Update CHANGELOG.md
+> **Full rules are enforced in `CLAUDE.md`. This section is the human reference.**
 
-Add a new `## [x.y.z] - YYYY-MM-DD` section under `## [Unreleased]` following [Keep a Changelog](https://keepachangelog.com) format. Sections used: `Added`, `Changed`, `Fixed`.
+### Checklist — every release, no exceptions
 
-### 2. Commit
+```
+[ ] 1. npm run build passes with zero TypeScript errors
+[ ] 2. CHANGELOG.md updated — [Unreleased] items moved to new [x.y.z] section
+[ ] 3. README.md updated if any user-facing feature changed
+[ ] 4. DEVELOPER.md updated if architecture / API / tooling changed
+[ ] 5. All changes committed (docs in same or prior commit)
+[ ] 6. Annotated tag created and pushed
+[ ] 7. GitHub Release created via gh release create
+```
 
-Follow [Conventional Commits](https://www.conventionalcommits.org):
+### Commands
 
 ```bash
+# 1. Commit everything
 git add .
-git commit -m "feat: description of change"
-# or: fix: / docs: / chore: / refactor:
-```
-
-### 3. Tag the release
-
-Use **annotated tags** — they carry a message, tagger identity, and date.
-
-```bash
-git tag -a v1.0.2 -m "Release v1.0.2"
+git commit -m "feat: description"   # or fix: / docs: / chore:
 git push origin main
-git push origin v1.0.2
+
+# 2. Annotated tag  (never lightweight)
+git tag -a vX.Y.Z -m "Release vX.Y.Z"
+git push origin vX.Y.Z
+
+# 3. GitHub Release  (immediately after tag push)
+gh release create vX.Y.Z \
+  --title "vX.Y.Z — Short description" \
+  --latest \
+  --notes "..."
 ```
 
-Tags trigger the GitHub Actions CI build (`.github/workflows/docker-publish.yml`). It:
-- Builds multi-arch image (`linux/amd64` + `linux/arm64`)
-- Pushes to Docker Hub:
-  - `byteoath/registry-ui:1.0.2`
-  - `byteoath/registry-ui:1.0`
-  - `byteoath/registry-ui:latest`
+Tags trigger CI (`.github/workflows/docker-publish.yml`) which builds multi-arch (`linux/amd64` + `linux/arm64`) and pushes to Docker Hub:
+- `byteoath/registry-ui:X.Y.Z`
+- `byteoath/registry-ui:X.Y`
+- `byteoath/registry-ui:latest`
 
-### 4. Semver guide
+### Semver guide
 
-| Change type | Version bump | Example |
-|-------------|-------------|---------|
-| Bug fix, docs, chore | Patch → `x.y.Z` | `1.0.1 → 1.0.2` |
-| New feature, backward-compatible | Minor → `x.Y.0` | `1.0.2 → 1.1.0` |
-| Breaking change | Major → `X.0.0` | `1.1.0 → 2.0.0` |
+| Change type | Bump | Example |
+|-------------|------|---------|
+| Bug fix, docs, chore | Patch `x.y.Z` | `1.0.2 → 1.0.3` |
+| New feature, backward-compatible | Minor `x.Y.0` | `1.0.3 → 1.1.0` |
+| Breaking change | Major `X.0.0` | `1.1.0 → 2.0.0` |
 
-### 5. Required GitHub Secrets
+### CHANGELOG format
 
-Set once in **GitHub → Settings → Secrets and variables → Actions**:
+Follows [Keep a Changelog](https://keepachangelog.com). Allowed section labels: `Added`, `Changed`, `Fixed`, `Removed`, `Deprecated`, `Security`.
+
+```markdown
+## [Unreleased]
+
+## [1.0.3] - 2026-06-01
+
+### Fixed
+- ...
+```
+
+### Required GitHub Secrets
 
 | Secret | Value |
 |--------|-------|
 | `DOCKERHUB_USERNAME` | `byteoath` |
-| `DOCKERHUB_TOKEN` | Docker Hub token with **Read, Write, Delete** scope |
+| `DOCKERHUB_TOKEN` | Docker Hub token — **Read, Write, Delete** scope required |
 
-Generate token: [Docker Hub](https://hub.docker.com) → Account Settings → Personal access tokens → Generate new token.
-
-> If CI fails with `401 Unauthorized` or `insufficient_scope`, regenerate the token with all three scopes and update the secret.
+Generate: [Docker Hub](https://hub.docker.com) → Account Settings → Personal access tokens.
 
 ### Manual publish (no CI)
 
 ```bash
-docker login   # enter byteoath credentials
-
 docker buildx create --use --name multiarch
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
   --provenance=false \
-  -t byteoath/registry-ui:1.0.2 \
+  -t byteoath/registry-ui:X.Y.Z \
   -t byteoath/registry-ui:latest \
   --push .
 ```
 
-> Always set `--provenance=false` for manual builds. Without it, the image is wrapped in an OCI image index even for single-platform builds, which breaks config blob access in registry UIs.
+> Always pass `--provenance=false`. Without it the image is wrapped in an OCI image index, breaking config blob access in registry UIs.
 
 ---
 
