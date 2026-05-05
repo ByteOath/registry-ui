@@ -19,6 +19,16 @@ export function formatDate(dateStr: string): string {
   })
 }
 
+export function formatRelativeDate(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const days = Math.floor(diff / 86_400_000)
+  if (days === 0) return 'today'
+  if (days === 1) return 'yesterday'
+  if (days < 30) return `${days}d ago`
+  if (days < 365) return `${Math.floor(days / 30)}mo ago`
+  return `${Math.floor(days / 365)}y ago`
+}
+
 /** Converts node:sqlite null-prototype rows to plain serializable objects */
 export function toPlain<T>(data: unknown): T {
   return JSON.parse(JSON.stringify(data)) as T

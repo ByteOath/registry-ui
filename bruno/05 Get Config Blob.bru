@@ -1,0 +1,20 @@
+meta {
+  name: Get Config Blob
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/v2/{{imageName}}/blobs/{{configDigest}}
+  body: none
+  auth: basic
+}
+
+auth:basic {
+  username: {{username}}
+  password: {{password}}
+}
+
+headers {
+  Accept: application/octet-stream, application/json, */*
+}

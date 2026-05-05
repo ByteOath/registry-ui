@@ -1,0 +1,20 @@
+meta {
+  name: Get Manifest
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/v2/{{imageName}}/manifests/{{tag}}
+  body: none
+  auth: basic
+}
+
+auth:basic {
+  username: {{username}}
+  password: {{password}}
+}
+
+headers {
+  Accept: application/vnd.docker.distribution.manifest.v2+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.oci.image.index.v1+json, application/json
+}

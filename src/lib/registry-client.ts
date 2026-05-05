@@ -4,6 +4,20 @@ export interface RegistryConfig {
   password?: string
 }
 
+export interface ImageConfig {
+  architecture: string | null
+  os: string | null
+  created: string | null
+  author: string | null
+  labels: Record<string, string> | null
+  env: string[] | null
+  exposedPorts: string[] | null
+  workingDir: string | null
+  entrypoint: string[] | null
+  cmd: string[] | null
+  history: Array<{ created?: string; created_by?: string; empty_layer?: boolean }>
+}
+
 interface RequestResult {
   status: number
   body: string
@@ -20,7 +34,7 @@ async function registryFetch(
   const url = path.startsWith('http') ? path : config.url.replace(/\/$/, '') + path
 
   const headers: Record<string, string> = {
-    Accept: 'application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json, application/json',
+    Accept: 'application/vnd.docker.distribution.manifest.v2+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.oci.image.index.v1+json, application/json',
     ...(options.headers as Record<string, string>),
   }
 
@@ -125,6 +139,36 @@ export async function getManifest(config: RegistryConfig, name: string, referenc
     layers: (manifest.layers || manifest.fsLayers || []).length,
     mediaType: manifest.mediaType || null,
     schemaVersion: manifest.schemaVersion || null,
+    configDigest: manifest.config?.digest ?? null,
+  }
+}
+
+export async function getImageConfig(
+  config: RegistryConfig,
+  name: string,
+  configDigest: string,
+): Promise<ImageConfig> {
+  const res = await registryFetch(config, `/v2/${name}/blobs/${configDigest}`, {
+    headers: { Accept: 'application/octet-stream, application/json, */*' },
+  })
+  if (res.status !== 200) throw new Error(`Registry error ${res.status}`)
+  const data = JSON.parse(res.body)
+  return {
+    architecture: data.architecture ?? null,
+    os: data.os ?? null,
+    created: data.created ?? null,
+    author: data.author ?? null,
+    labels: data.config?.Labels ?? null,
+    env: data.config?.Env ?? null,
+    exposedPorts: data.config?.ExposedPorts ? Object.keys(data.config.ExposedPorts) : null,
+    workingDir: data.config?.WorkingDir ?? null,
+    entrypoint: data.config?.Entrypoint ?? null,
+    cmd: data.config?.Cmd ?? null,
+    history: (data.history ?? []).map((h: { created?: string; created_by?: string; empty_layer?: boolean }) => ({
+      created: h.created,
+      created_by: h.created_by,
+      empty_layer: h.empty_layer,
+    })),
   }
 }
 

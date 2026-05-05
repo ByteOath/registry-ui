@@ -1,0 +1,20 @@
+meta {
+  name: Get Catalog
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/v2/_catalog?n=100
+  body: none
+  auth: basic
+}
+
+auth:basic {
+  username: {{username}}
+  password: {{password}}
+}
+
+headers {
+  Accept: application/json
+}

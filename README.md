@@ -1,6 +1,6 @@
 # Registry UI
 
-A minimal, self-hosted Docker Registry browser. Connect multiple registries, manage users and roles — all from one clean interface.
+A minimal, self-hosted Docker Registry browser. Connect multiple registries, browse images, inspect tag details — all from one clean interface.
 
 ![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js)
 ![Docker](https://img.shields.io/badge/Docker-byteoath%2Fregistry--ui-blue?logo=docker)
@@ -30,12 +30,22 @@ A minimal, self-hosted Docker Registry browser. Connect multiple registries, man
 
 ## Features
 
-- **Multi-registry** — connect multiple Docker registries (with or without auth)
-- **Browse** — search images, list tags, view size and digest
-- **Delete** — remove image tags directly from the UI (admin only)
-- **Auth** — session-based login, master admin via env vars
+- **Multi-registry** — connect and manage multiple Docker registries (with or without auth)
+- **Browse** — search images, list tags with size, digest, and manifest type
+- **Tag counts** — see how many tags each image has directly from the registry list
+- **Tag details drawer** — click any tag to inspect full metadata in a side panel:
+  - Architecture & OS
+  - Created date
+  - Container config (working dir, entrypoint, cmd, exposed ports)
+  - Environment variables
+  - Image labels
+  - Build history (layer-by-layer commands)
+- **Sort tags** — by created date (default), name, or size
+- **Latest badge** — `latest` tag is always visually highlighted and pinned to the top
+- **Delete** — remove image tags by digest directly from the UI (admin only)
+- **Auth** — session-based login with encrypted cookies
 - **Role management** — admin and viewer roles, managed from the UI
-- **Single container** — one Docker image, no external database
+- **Single container** — one Docker image, SQLite database, no external dependencies
 
 ## Quick Start
 
@@ -92,9 +102,20 @@ volumes:
 Supports:
 - Unauthenticated registries (`http://registry:5000`)
 - Basic auth registries
-- Token/Bearer auth registries (e.g. Docker Hub, GCR)
+- Bearer/token auth registries (e.g. Harbor, GitLab Registry)
 
 > To enable image deletion, start your registry with `REGISTRY_STORAGE_DELETE_ENABLED=true`.
+
+## Registry Compatibility
+
+| Registry | Browse | Tag Details | Delete |
+|----------|--------|-------------|--------|
+| Docker Distribution (`registry:2`) | ✅ | ✅ | ✅ (if delete enabled) |
+| Harbor | ✅ | ✅ | ✅ |
+| GitLab Registry | ✅ | ✅ | ✅ |
+| Nexus | ✅ | ✅ | ✅ |
+
+> **Note for `docker/build-push-action@v6` users:** Set `provenance: false` in your GitHub Actions workflow. Without it, images are pushed as OCI image indexes (manifest lists) which do not expose a config blob — tag details like arch, OS, labels and history will be unavailable.
 
 ## User Roles
 
@@ -107,10 +128,11 @@ Add users at **Admin → Users**.
 
 ## Tech Stack
 
-- [Next.js 15](https://nextjs.org) — fullstack React framework
-- [node:sqlite](https://nodejs.org/api/sqlite.html) — embedded database (Node.js built-in)
-- [iron-session](https://github.com/vvo/iron-session) — encrypted cookie sessions
-- [shadcn/ui](https://ui.shadcn.com) + [Tailwind CSS](https://tailwindcss.com) — UI
+- [Next.js 15](https://nextjs.org) — fullstack React framework (App Router, React Server Components)
+- [node:sqlite](https://nodejs.org/api/sqlite.html) — embedded database (Node.js built-in, no ORM)
+- [iron-session](https://github.com/vvo/iron-session) — AES-encrypted cookie sessions
+- [shadcn/ui](https://ui.shadcn.com) + [Tailwind CSS](https://tailwindcss.com) — UI components
+- Docker Registry V2 API — all image data fetched live, nothing cached
 
 ## License
 

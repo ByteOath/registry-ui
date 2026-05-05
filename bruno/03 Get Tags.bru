@@ -1,0 +1,20 @@
+meta {
+  name: Get Tags
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/v2/{{imageName}}/tags/list?n=100
+  body: none
+  auth: basic
+}
+
+auth:basic {
+  username: {{username}}
+  password: {{password}}
+}
+
+headers {
+  Accept: application/json
+}

@@ -1,0 +1,20 @@
+meta {
+  name: Delete Tag
+  type: http
+  seq: 6
+}
+
+delete {
+  url: {{baseUrl}}/v2/{{imageName}}/manifests/{{digest}}
+  body: none
+  auth: basic
+}
+
+auth:basic {
+  username: {{username}}
+  password: {{password}}
+}
+
+headers {
+  Accept: application/json
+}

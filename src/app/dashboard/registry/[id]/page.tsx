@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { Suspense } from 'react'
 import db from '@/lib/db'
 import { getSession } from '@/lib/auth'
-import { getCatalog } from '@/lib/registry-client'
+import { getCatalog, getTags } from '@/lib/registry-client'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { ChevronRight, Container, ArrowLeft } from 'lucide-react'
@@ -27,15 +27,25 @@ export default async function RegistryPage({ params, searchParams }: {
   let repos: string[] = []
   let error: string | null = null
 
+  const registryConfig = {
+    url: registry.url,
+    username: registry.username || undefined,
+    password: registry.password || undefined,
+  }
+
   try {
-    repos = await getCatalog({
-      url: registry.url,
-      username: registry.username || undefined,
-      password: registry.password || undefined,
-    })
+    repos = await getCatalog(registryConfig)
   } catch (e) {
     error = String(e)
   }
+
+  const tagCounts = await Promise.all(
+    repos.map(async (repo) => {
+      try { return (await getTags(registryConfig, repo)).length }
+      catch { return null }
+    })
+  )
+  const tagCountMap = new Map<string, number | null>(repos.map((r, i) => [r, tagCounts[i]]))
 
   const filtered = q ? repos.filter(r => r.toLowerCase().includes(q.toLowerCase())) : repos
 
@@ -80,7 +90,14 @@ export default async function RegistryPage({ params, searchParams }: {
                     <Container className="h-4 w-4 text-muted-foreground shrink-0" />
                     <span className="text-sm font-mono">{repo}</span>
                   </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  <div className="flex items-center gap-2">
+                    {tagCountMap.get(repo) != null && (
+                      <Badge variant="secondary" className="text-xs tabular-nums">
+                        {tagCountMap.get(repo)} tags
+                      </Badge>
+                    )}
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  </div>
                 </Link>
               ))
             )}
