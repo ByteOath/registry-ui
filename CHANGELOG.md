@@ -11,6 +11,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.3] - 2026-05-08
+
+### Added
+
+- **Three-role system** — `super_admin`, `admin`, and `viewer` roles replace the previous two-role system
+  - `super_admin` is the bootstrap user seeded from `ADMIN_USERNAME`/`ADMIN_PASSWORD` env vars; cannot be created or deleted via the UI
+  - `admin` can manage registries, delete image tags, create and delete `viewer` users
+  - `viewer` has read-only access
+- **Role picker** — inline Admin / Viewer toggle buttons in the Add User dialog (replaces dropdown, avoids z-index issues inside dialogs)
+- **`.dockerignore`** — excludes `.env.local` and `.env*.local` from Docker build context so Dokploy-injected environment variables are used at runtime instead of baked-in local values
+- **Login rate limiting** — max 10 attempts per 15 minutes per IP address; returns HTTP 429 on breach
+
+### Changed
+
+- **`ADMIN_PASSWORD` sync on startup** — if `ADMIN_PASSWORD` env var is explicitly set and differs from the stored hash, the `super_admin` password is updated automatically on boot; Dokploy env var changes now take effect on next redeploy without wiping the database volume
+- **`sessionOptions` lazy evaluation** — `APP_SECRET` is now read at request time instead of module init, ensuring runtime env vars are always used
+- **`apiError`** no longer leaks internal error messages or stack traces to clients; all unexpected errors return `"Internal server error"` and log to the server console
+- **Test connection** — wrong credentials now show a red **"Authentication failed — check username and password"** message instead of a misleading green "Connected — 0 images found"
+- **Select dropdown z-index** raised to `z-[201]` so Radix UI select menus render above dialogs (`z-[200]`)
+
+### Fixed
+
+- `super_admin` users are correctly stored and restored from session — the login route previously cast role to `'admin' | 'viewer'`, which would cause TypeScript errors for the new role
+- DB migration on first boot with existing database: users table is recreated with the updated `CHECK(role IN ('super_admin','admin','viewer'))` constraint and the seeded admin is promoted to `super_admin`
+- Registry URL validated as `http` or `https` before saving, preventing SSRF via `file://` or other schemes
+- `image` and `tag` query params validated with regex before proxying to registry API
+- Manifest `digest` validated as `sha256:[a-f0-9]{64}` before delete
+- User `id` path param validated as a positive integer
+- Startup warnings emitted if `APP_SECRET` or `ADMIN_PASSWORD` env vars are not set
+
+---
+
 ## [1.0.2] - 2026-05-06
 
 ### Added
@@ -81,7 +113,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/byteoath/registry-ui/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/byteoath/registry-ui/compare/v1.0.3...HEAD
+[1.0.3]: https://github.com/byteoath/registry-ui/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/byteoath/registry-ui/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/byteoath/registry-ui/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/byteoath/registry-ui/releases/tag/v1.0.0
