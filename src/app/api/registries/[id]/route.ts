@@ -3,6 +3,13 @@ import { requireAdmin } from '@/lib/auth'
 import db from '@/lib/db'
 import { apiError } from '@/lib/utils'
 
+function isValidRegistryUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw)
+    return u.protocol === 'http:' || u.protocol === 'https:'
+  } catch { return false }
+}
+
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await requireAdmin()
@@ -11,6 +18,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     if (!name?.trim() || !url?.trim()) {
       return Response.json({ error: 'Name and URL required' }, { status: 400 })
+    }
+    if (!isValidRegistryUrl(url.trim())) {
+      return Response.json({ error: 'URL must be a valid http or https address' }, { status: 400 })
     }
     if (!['production', 'staging', 'local'].includes(environment)) {
       return Response.json({ error: 'Invalid environment' }, { status: 400 })

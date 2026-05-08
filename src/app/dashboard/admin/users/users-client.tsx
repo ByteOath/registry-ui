@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Plus, Trash2, Loader2 } from 'lucide-react'
@@ -16,7 +15,7 @@ interface User {
   id: number; username: string; role: string; created_at: string
 }
 
-export default function UsersClient({ users: initial, currentUserId }: { users: User[]; currentUserId: number }) {
+export default function UsersClient({ users: initial, currentUserId, currentUserRole }: { users: User[]; currentUserId: number; currentUserRole: string }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -74,18 +73,22 @@ export default function UsersClient({ users: initial, currentUserId }: { users: 
               </div>
               <div className="space-y-2">
                 <Label>Role</Label>
-                <Select value={role} onValueChange={(v) => setRole(v as 'admin' | 'viewer')}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="viewer">Viewer — read-only</SelectItem>
-                    <SelectItem value="admin">Admin — full access</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['admin', 'viewer'] as const).map(r => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setRole(r)}
+                      className={`px-3 py-2 rounded-md border text-sm text-left transition-colors ${role === r ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-input hover:bg-accent'}`}
+                    >
+                      <div className="font-medium capitalize">{r}</div>
+                      <div className="text-xs text-muted-foreground">{r === 'admin' ? 'Manage registries & users' : 'Read-only access'}</div>
+                    </button>
+                  ))}
+                </div>
               </div>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+                <Button type="button" variant="outline" onClick={() => { setOpen(false); setRole('viewer') }}>Cancel</Button>
                 <Button type="submit" disabled={loading}>
                   {loading && <Loader2 className="h-4 w-4 animate-spin" />}
                   Create
@@ -112,8 +115,8 @@ export default function UsersClient({ users: initial, currentUserId }: { users: 
               </div>
             </div>
             <div className="flex items-center gap-3 ml-4 shrink-0">
-              <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>{user.role}</Badge>
-              {user.id !== currentUserId && (
+              <Badge variant={user.role === 'super_admin' ? 'default' : user.role === 'admin' ? 'default' : 'secondary'}>{user.role}</Badge>
+              {user.id !== currentUserId && user.role !== 'super_admin' && !(currentUserRole === 'admin' && user.role === 'admin') && (
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">

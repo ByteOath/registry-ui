@@ -18,6 +18,12 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       return Response.json({ error: 'name and digest required' }, { status: 400 })
     }
 
+    const IMAGE_RE = /^[a-z0-9._\-\/]+$/
+    const DIGEST_RE = /^sha256:[a-f0-9]{64}$/
+    if (!IMAGE_RE.test(name) || !DIGEST_RE.test(digest)) {
+      return Response.json({ error: 'Invalid name or digest' }, { status: 400 })
+    }
+
     const registry = db.prepare('SELECT url, username, password FROM registries WHERE id = ?').get(id) as unknown as Registry | undefined
     if (!registry) return Response.json({ error: 'Registry not found' }, { status: 404 })
 

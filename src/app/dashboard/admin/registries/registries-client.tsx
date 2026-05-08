@@ -20,6 +20,7 @@ interface CheckResult {
   online: boolean
   repoCount: number
   repos: string[]
+  authError?: boolean
 }
 
 interface FormState {
@@ -121,7 +122,9 @@ function RegistryForm({
             <div className="flex items-center gap-2 font-medium">
               {checkResult.online
                 ? <><CheckCircle2 className="h-4 w-4 text-emerald-500" /><span className="text-emerald-600 dark:text-emerald-400">Connected — {checkResult.repoCount} images found</span></>
-                : <><XCircle className="h-4 w-4 text-destructive" /><span className="text-destructive">Unreachable — check URL and credentials</span></>}
+                : checkResult.authError
+                  ? <><XCircle className="h-4 w-4 text-destructive" /><span className="text-destructive">Authentication failed — check username and password</span></>
+                  : <><XCircle className="h-4 w-4 text-destructive" /><span className="text-destructive">Unreachable — check URL and credentials</span></>}
             </div>
             {checkResult.online && checkResult.repos.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-0.5">

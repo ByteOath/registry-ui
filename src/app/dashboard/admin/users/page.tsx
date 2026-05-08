@@ -9,7 +9,7 @@ interface User {
 
 export default async function UsersPage() {
   const session = await getSession()
-  if (session.user?.role !== 'admin') redirect('/dashboard')
+  if (session.user?.role !== 'admin' && session.user?.role !== 'super_admin') redirect('/dashboard')
 
   const users = JSON.parse(JSON.stringify(
     db.prepare('SELECT id, username, role, created_at FROM users ORDER BY created_at ASC').all()
@@ -21,7 +21,7 @@ export default async function UsersPage() {
         <h1 className="text-2xl font-semibold">Users</h1>
         <p className="text-sm text-muted-foreground mt-1">Manage user access and roles</p>
       </div>
-      <UsersClient users={users} currentUserId={session.user!.id} />
+      <UsersClient users={users} currentUserId={session.user!.id} currentUserRole={session.user!.role} />
     </div>
   )
 }

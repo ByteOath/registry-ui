@@ -39,5 +39,6 @@ export function apiError(e: unknown): Response {
     if (e.message === 'UNAUTHORIZED') return Response.json({ error: 'Unauthorized' }, { status: 401 })
     if (e.message === 'FORBIDDEN') return Response.json({ error: 'Forbidden' }, { status: 403 })
   }
-  return Response.json({ error: String(e) }, { status: 500 })
+  console.error('[apiError]', e)
+  return Response.json({ error: 'Internal server error' }, { status: 500 })
 }

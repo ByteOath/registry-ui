@@ -47,7 +47,7 @@ export default function Sidebar({ user }: { user: SessionUser }) {
           </Link>
         ))}
 
-        {user.role === 'admin' && (
+        {(user.role === 'admin' || user.role === 'super_admin') && (
           <>
             <div className="pt-4 pb-1 px-3">
               <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Admin</span>

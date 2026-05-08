@@ -9,7 +9,7 @@ interface Registry {
 
 export default async function RegistriesPage() {
   const session = await getSession()
-  if (session.user?.role !== 'admin') redirect('/dashboard')
+  if (session.user?.role !== 'admin' && session.user?.role !== 'super_admin') redirect('/dashboard')
 
   const registries = JSON.parse(JSON.stringify(
     db.prepare('SELECT id, name, url, username, environment, created_at FROM registries ORDER BY created_at DESC').all()

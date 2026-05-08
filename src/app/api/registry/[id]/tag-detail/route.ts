@@ -19,6 +19,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     if (!image || !tag) return Response.json({ error: 'image and tag are required' }, { status: 400 })
 
+    const IMAGE_RE = /^[a-z0-9._\-\/]+$/
+    const TAG_RE = /^[a-zA-Z0-9._\-]+$/
+    if (!IMAGE_RE.test(image) || !TAG_RE.test(tag)) {
+      return Response.json({ error: 'Invalid image or tag' }, { status: 400 })
+    }
+
     const registry = db
       .prepare('SELECT url, username, password FROM registries WHERE id = ?')
       .get(id) as unknown as Registry | undefined

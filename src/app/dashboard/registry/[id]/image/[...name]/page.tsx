@@ -74,7 +74,7 @@ export default async function ImagePage({ params, searchParams }: {
     return new Date(b.created).getTime() - new Date(a.created).getTime()
   })
 
-  const isAdmin = session.user?.role === 'admin'
+  const isAdmin = session.user?.role === 'admin' || session.user?.role === 'super_admin'
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">

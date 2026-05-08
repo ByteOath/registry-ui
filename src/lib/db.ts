@@ -24,7 +24,7 @@ export function getDb(): DatabaseSync {
       id            INTEGER PRIMARY KEY AUTOINCREMENT,
       username      TEXT    NOT NULL UNIQUE,
       password_hash TEXT    NOT NULL,
-      role          TEXT    NOT NULL DEFAULT 'viewer' CHECK(role IN ('admin','viewer')),
+      role          TEXT    NOT NULL DEFAULT 'viewer' CHECK(role IN ('super_admin','admin','viewer')),
       created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -38,12 +38,44 @@ export function getDb(): DatabaseSync {
     );
   `)
 
+  // Migration: add super_admin role for existing DBs
+  try {
+    const tableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").get() as { sql: string } | undefined
+    if (tableInfo?.sql && !tableInfo.sql.includes('super_admin')) {
+      // Old schema detected, recreate table with new constraint
+      db.exec(`
+        CREATE TABLE users_new (
+          id            INTEGER PRIMARY KEY AUTOINCREMENT,
+          username      TEXT    NOT NULL UNIQUE,
+          password_hash TEXT    NOT NULL,
+          role          TEXT    NOT NULL DEFAULT 'viewer' CHECK(role IN ('super_admin','admin','viewer')),
+          created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+        INSERT INTO users_new SELECT * FROM users;
+        DROP TABLE users;
+        ALTER TABLE users_new RENAME TO users;
+      `)
+      // Update seeded admin to super_admin
+      const adminUsername = process.env.ADMIN_USERNAME || 'admin'
+      db.prepare("UPDATE users SET role = 'super_admin' WHERE username = ?").run(adminUsername)
+    }
+  } catch {}
+
   const adminUsername = process.env.ADMIN_USERNAME || 'admin'
   const adminPassword = process.env.ADMIN_PASSWORD || 'admin'
-  const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(adminUsername)
+  if (!process.env.ADMIN_PASSWORD) {
+    console.warn('[SECURITY] ADMIN_PASSWORD env var not set — using default "admin". Change immediately.')
+  }
+  const existing = db.prepare('SELECT id, password_hash FROM users WHERE username = ?').get(adminUsername) as { id: number; password_hash: string } | undefined
   if (!existing) {
+    // First run: seed super_admin
     const hash = bcrypt.hashSync(adminPassword, 10)
-    db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)').run(adminUsername, hash, 'admin')
+    db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)').run(adminUsername, hash, 'super_admin')
+  } else if (process.env.ADMIN_PASSWORD && !bcrypt.compareSync(adminPassword, existing.password_hash)) {
+    // ADMIN_PASSWORD explicitly set and differs from stored hash — sync it
+    const hash = bcrypt.hashSync(adminPassword, 10)
+    db.prepare('UPDATE users SET password_hash = ?, role = ? WHERE username = ?').run(hash, 'super_admin', adminUsername)
+    console.log(`[INFO] super_admin password updated from ADMIN_PASSWORD env var.`)
   }
 
   // Add environment column if missing (migration for existing DBs)

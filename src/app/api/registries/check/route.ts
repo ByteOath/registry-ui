@@ -20,7 +20,11 @@ export async function POST(req: NextRequest) {
     try {
       const repos = await getCatalog(config)
       return Response.json({ online: true, repoCount: repos.length, repos: repos.slice(0, 10) })
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      if (msg.includes('401')) {
+        return Response.json({ online: false, repoCount: 0, repos: [], authError: true })
+      }
       return Response.json({ online: true, repoCount: 0, repos: [] })
     }
   } catch (e) {

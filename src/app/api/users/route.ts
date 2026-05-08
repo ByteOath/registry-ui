@@ -16,7 +16,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin()
+    const caller = await requireAdmin()
     const { username, password, role = 'viewer' } = await req.json()
 
     if (!username?.trim() || !password) {
@@ -27,6 +27,11 @@ export async function POST(req: NextRequest) {
     }
     if (!['admin', 'viewer'].includes(role)) {
       return Response.json({ error: 'Invalid role' }, { status: 400 })
+    }
+
+    // admin can only create viewer users; super_admin can create any
+    if (caller.role === 'admin' && role !== 'viewer') {
+      return Response.json({ error: 'Insufficient permissions to create this role' }, { status: 403 })
     }
 
     const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username.trim())
