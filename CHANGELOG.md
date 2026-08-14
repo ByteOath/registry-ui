@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.1.0] - 2026-08-14
+
 ### Added
 
 - **Built-in manual** — `/dashboard/docs` ("Manual" in the sidebar): what the app does, connecting a registry, copy-pasteable `docker login` / `build` / `push` commands using your own registry host, roles, deletion, cleanup, and a FAQ
