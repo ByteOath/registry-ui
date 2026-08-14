@@ -15,9 +15,10 @@ interface Props {
   imageName: string
   tag: string
   digest: string
+  size?: number
 }
 
-export default function DeleteTagButton({ registryId, imageName, tag, digest }: Props) {
+export default function DeleteTagButton({ registryId, imageName, tag, digest, size }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
 
@@ -26,7 +27,7 @@ export default function DeleteTagButton({ registryId, imageName, tag, digest }: 
     const res = await fetch(`/api/registry/${registryId}/delete`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: imageName, digest }),
+      body: JSON.stringify({ name: imageName, tag, digest, size }),
     })
     setLoading(false)
     if (res.ok) {

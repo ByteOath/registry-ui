@@ -8,12 +8,13 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
-import { Plus, Trash2, Loader2, Lock, Unlock, Pencil, Wifi, WifiOff, Container, CheckCircle2, XCircle } from 'lucide-react'
+import { Plus, Trash2, Loader2, Lock, Unlock, Pencil, Wifi, Timer, CheckCircle2, XCircle } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import EnvBadge from '@/components/env-badge'
 
 interface Registry {
   id: number; name: string; url: string; username: string; environment: string; created_at: string
+  retention_keep_last: number; retention_protect: string
 }
 
 interface CheckResult {
@@ -25,9 +26,13 @@ interface CheckResult {
 
 interface FormState {
   name: string; url: string; username: string; password: string; environment: string
+  retention_keep_last: string; retention_protect: string
 }
 
-const defaultForm: FormState = { name: '', url: '', username: '', password: '', environment: 'production' }
+const defaultForm: FormState = {
+  name: '', url: '', username: '', password: '', environment: 'production',
+  retention_keep_last: '0', retention_protect: 'latest',
+}
 
 function RegistryForm({
   initial,
@@ -107,6 +112,36 @@ function RegistryForm({
         </div>
       </div>
 
+      {/* Retention policy */}
+      <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
+        <div>
+          <span className="text-xs font-medium text-muted-foreground">Automatic tag cleanup</span>
+          <p className="text-[11px] text-muted-foreground/70 mt-0.5">
+            Keeps the newest N tags of every image and permanently deletes the rest. Runs in the
+            background and on demand. Deletions cannot be undone.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label>Keep last N tags <span className="text-muted-foreground text-xs">(0 = off)</span></Label>
+            <Input
+              type="number" min={0} max={10000}
+              value={form.retention_keep_last}
+              onChange={e => set('retention_keep_last', e.target.value)}
+              placeholder="0"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Protected tags</Label>
+            <Input
+              value={form.retention_protect}
+              onChange={e => set('retention_protect', e.target.value)}
+              placeholder="latest, v*, prod-*"
+            />
+          </div>
+        </div>
+      </div>
+
       {/* Connectivity check */}
       <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
         <div className="flex items-center justify-between">
@@ -155,6 +190,7 @@ export default function RegistriesClient({ registries: initial }: { registries: 
   const router = useRouter()
   const [addOpen, setAddOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<Registry | null>(null)
+  const [cleaningId, setCleaningId] = useState<number | null>(null)
 
   async function handleAdd(data: FormState) {
     const res = await fetch('/api/registries', {
@@ -187,6 +223,17 @@ export default function RegistriesClient({ registries: initial }: { registries: 
       const d = await res.json()
       toast.error(d.error || 'Failed to update')
     }
+  }
+
+  async function handleCleanup(reg: Registry) {
+    setCleaningId(reg.id)
+    const res = await fetch(`/api/registry/${reg.id}/retention/run`, { method: 'POST' })
+    const data = await res.json()
+    setCleaningId(null)
+    if (!res.ok) { toast.error(data.error || 'Cleanup failed'); return }
+    toast.success(`${reg.name}: deleted ${data.deleted} tag${data.deleted === 1 ? '' : 's'}`)
+    if (data.errors?.length) toast.error(data.errors.slice(0, 3).join('; '))
+    router.refresh()
   }
 
   async function handleDelete(id: number) {
@@ -232,6 +279,8 @@ export default function RegistriesClient({ registries: initial }: { registries: 
                 username: editTarget.username,
                 password: '',
                 environment: editTarget.environment,
+                retention_keep_last: String(editTarget.retention_keep_last ?? 0),
+                retention_protect: editTarget.retention_protect ?? 'latest',
               }}
               onSave={handleEdit}
               onCancel={() => setEditTarget(null)}
@@ -255,11 +304,42 @@ export default function RegistriesClient({ registries: initial }: { registries: 
                     {reg.username
                       ? <span className="flex items-center gap-1 text-xs text-muted-foreground"><Lock className="h-3 w-3" />Auth</span>
                       : <span className="flex items-center gap-1 text-xs text-muted-foreground/40"><Unlock className="h-3 w-3" />No auth</span>}
+                    {reg.retention_keep_last > 0 && (
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground" title={`Protected: ${reg.retention_protect}`}>
+                        <Timer className="h-3 w-3" />Keep {reg.retention_keep_last}
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground font-mono mt-0.5">{reg.url}</p>
                 </div>
                 <div className="flex items-center gap-1 ml-4 shrink-0">
                   <span className="text-xs text-muted-foreground hidden sm:block mr-2">{formatDate(reg.created_at)}</span>
+                  {reg.retention_keep_last > 0 && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Run cleanup now" disabled={cleaningId === reg.id}>
+                          {cleaningId === reg.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Timer className="h-3.5 w-3.5" />}
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Run cleanup now?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Every image on <span className="font-medium">{reg.name}</span> keeps its newest{' '}
+                            <span className="font-medium">{reg.retention_keep_last}</span> tags plus{' '}
+                            <span className="font-mono">{reg.retention_protect || 'latest'}</span>. All other tags are
+                            deleted immediately and permanently.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => handleCleanup(reg)}>
+                            Run cleanup
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => setEditTarget(reg)}>
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>

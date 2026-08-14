@@ -3,10 +3,12 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import type { SessionUser } from '@/lib/auth'
-import { LayoutDashboard, Users, Container } from 'lucide-react'
+import { LayoutDashboard, Users, Container, Trash2, BookOpen } from 'lucide-react'
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/dashboard/deleted', label: 'Deleted', icon: Trash2 },
+  { href: '/dashboard/docs', label: 'Manual', icon: BookOpen },
 ]
 
 const adminItems = [

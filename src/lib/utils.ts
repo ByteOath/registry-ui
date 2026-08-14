@@ -34,11 +34,20 @@ export function toPlain<T>(data: unknown): T {
   return JSON.parse(JSON.stringify(data)) as T
 }
 
+/** Error whose message is safe to show the user — operator-actionable, no internals. */
+export class PublicError extends Error {
+  constructor(message: string, public status = 400) {
+    super(message)
+    this.name = 'PublicError'
+  }
+}
+
 export function apiError(e: unknown): Response {
   if (e instanceof Error) {
     if (e.message === 'UNAUTHORIZED') return Response.json({ error: 'Unauthorized' }, { status: 401 })
     if (e.message === 'FORBIDDEN') return Response.json({ error: 'Forbidden' }, { status: 403 })
   }
+  if (e instanceof PublicError) return Response.json({ error: e.message }, { status: e.status })
   console.error('[apiError]', e)
   return Response.json({ error: 'Internal server error' }, { status: 500 })
 }

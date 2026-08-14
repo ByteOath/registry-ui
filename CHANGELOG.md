@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Built-in manual** — `/dashboard/docs` ("Manual" in the sidebar): what the app does, connecting a registry, copy-pasteable `docker login` / `build` / `push` commands using your own registry host, roles, deletion, cleanup, and a FAQ
+- **Bulk tag delete** — checkboxes on the tag list plus a "Delete selected" action; tags sharing a digest are deleted once and logged individually; batches capped at 100 tags
+- **Automatic tag cleanup (retention)** — per-registry "keep last N tags per image" with protected tag patterns (`latest, v*, prod-*`); background sweep every `RETENTION_INTERVAL_HOURS` (24 by default, never at start-up), disabled with `RETENTION_AUTO=false`, plus a "Run cleanup now" action per registry
+- **Deleted tags page** — `/dashboard/deleted` audit log of every removed tag with registry, digest, size, reason (`manual` / `auto`), who deleted it and when; filterable by registry and image
+- **`POST /api/registry/[id]/retention/run`** — admin-only manual retention sweep for one registry
+- **`deleted_tags` table** and `registries.retention_keep_last` / `registries.retention_protect` columns, both added by in-place migration for existing databases
+- **`npm test`** — `node --test` unit tests for retention tag-pattern matching (`src/lib/tag-match.ts`)
+- `RETENTION_AUTO` and `RETENTION_INTERVAL_HOURS` environment variables
+
+### Changed
+
+- **`apiError`** now forwards the message of a `PublicError` (a new error class for operator-actionable failures) with its status code; every other error still returns `"Internal server error"` with no detail
+- `DELETE /api/registry/[id]/delete` accepts `{ name, tags: [...] }` for bulk deletion alongside the existing `{ name, digest }` shape, and records every deletion in the audit log
+- Tag enrichment moved into a shared `listTagsWithMeta` helper in `src/lib/registry-client.ts`, used by both the image page and the retention sweep
+- README documents deletion, automatic cleanup and the FAQ; the roles table now lists `super_admin`
+
+### Fixed
+
+- Failed tag deletion showed **"Internal server error"** instead of the real cause — a registry without deletion enabled now reports `Delete not enabled on registry (set REGISTRY_STORAGE_DELETE_ENABLED=true)` (HTTP 409), and other registry failures report their status
+- Removed dead `WifiOff` and `Container` icon imports from the registries admin client
+
 ---
 
 ## [1.0.3] - 2026-05-08

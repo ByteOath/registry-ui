@@ -42,7 +42,10 @@ A minimal, self-hosted Docker Registry browser. Connect multiple registries, bro
   - Build history (layer-by-layer commands)
 - **Sort tags** — by created date (default), name, or size
 - **Latest badge** — `latest` tag is always visually highlighted and pinned to the top
-- **Delete** — remove image tags by digest directly from the UI (admin only)
+- **Delete** — remove image tags by digest directly from the UI (admin only), one at a time or in bulk
+- **Automatic cleanup** — keep only the newest N tags per image, with protected tag patterns (`latest`, `v*`, `prod-*`)
+- **Deleted-tags log** — separate page listing every removed tag with who deleted it, when, and whether it was manual or automatic
+- **Built-in manual** — how-to guide and FAQ at **Manual** in the sidebar
 - **Auth** — session-based login with encrypted cookies
 - **Role management** — admin and viewer roles, managed from the UI
 - **Single container** — one Docker image, SQLite database, no external dependencies
@@ -89,6 +92,8 @@ volumes:
 | `ADMIN_PASSWORD` | No | `admin` | Master admin password |
 | `APP_SECRET` | **Yes** | — | Session encryption secret — use `openssl rand -hex 32` |
 | `DB_PATH` | No | `/data/registry-ui.db` | SQLite database path |
+| `RETENTION_AUTO` | No | `true` | Set to `false` to disable the background tag-cleanup sweep |
+| `RETENTION_INTERVAL_HOURS` | No | `24` | How often the cleanup sweep runs (never at start-up) |
 
 > **Note:** `ADMIN_USERNAME` / `ADMIN_PASSWORD` only seed the initial admin. Change the password from the UI after first login.
 
@@ -123,8 +128,68 @@ Supports:
 |------|--------|---------------|--------------|-------------------|
 | viewer | ✅ | ❌ | ❌ | ❌ |
 | admin | ✅ | ✅ | ✅ | ✅ |
+| super_admin | ✅ | ✅ | ✅ | ✅ |
 
-Add users at **Admin → Users**.
+Add users at **Admin → Users**. `super_admin` is the bootstrap account seeded from `ADMIN_USERNAME` / `ADMIN_PASSWORD`; it cannot be created or deleted from the UI.
+
+## Deleting Tags
+
+Admins get a delete button on every tag, and checkboxes for deleting several at once. Every deletion is recorded on the **Deleted** page — image, tag, digest, size, who did it, and when.
+
+Deletion must be enabled on the registry itself:
+
+```yaml
+services:
+  registry:
+    image: registry:2
+    environment:
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"
+```
+
+Deleting removes the manifest immediately; disk space is only reclaimed when the registry garbage-collects:
+
+```bash
+docker exec -it registry bin/registry garbage-collect /etc/docker/registry/config.yml
+```
+
+> Deleted tags cannot be restored. The Deleted page is an audit log, not a recycle bin.
+
+## Automatic Tag Cleanup
+
+Per registry, in **Admin → Registries → Edit**:
+
+- **Keep last N tags** — how many tags of each image survive, newest build date first. `0` (the default) turns cleanup off.
+- **Protected tags** — comma-separated patterns never deleted, `*` being the wildcard: `latest, v*, prod-*`. `latest` is always protected.
+
+The sweep runs every `RETENTION_INTERVAL_HOURS` (24 by default) and never at start-up, so a restart loop cannot trigger deletions. The timer icon next to a registry runs the same sweep on demand. Removals appear on the **Deleted** page marked `auto`.
+
+## FAQ
+
+**Delete fails with "Delete not enabled on registry".**
+The registry rejects DELETE until it is started with `REGISTRY_STORAGE_DELETE_ENABLED=true` (or `storage.delete.enabled: true` in `config.yml`). Restart the registry after changing it.
+
+**I deleted tags but the disk didn't shrink.**
+Expected — deleting removes the manifest, not the layer blobs. Run the registry's garbage collector to reclaim the space.
+
+**Can I restore a deleted tag?**
+No. Push the image again. The Deleted page is a log.
+
+**I deleted one tag and another vanished too.**
+They shared a digest (typically `1.0.0` and `latest` on the same build). Registries delete manifests by digest, so all tags on that digest go together.
+
+**The image list is empty or shows a registry error.**
+Check the base URL (no `/v2` suffix), the credentials, and that the registry is reachable from the Registry UI container. **Test connection** on the registry form distinguishes auth failures from unreachable hosts.
+
+**Who can delete?**
+Only `admin` and `super_admin`. Viewers see no delete controls and the API rejects them.
+
+**Where is data stored?**
+One SQLite file at `DB_PATH` (default `/data/registry-ui.db`). Mount a volume at `/data`, or users and registry connections are lost on restart.
+
+**I forgot the admin password.**
+Set `ADMIN_PASSWORD` and restart — the `super_admin` password is re-synced from that variable on boot.
+
+> The same guide, with copy-pasteable push commands, is built into the app under **Manual** in the sidebar.
 
 ## Tech Stack
 

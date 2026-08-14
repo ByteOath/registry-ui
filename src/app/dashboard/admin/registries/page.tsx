@@ -5,6 +5,7 @@ import RegistriesClient from './registries-client'
 
 interface Registry {
   id: number; name: string; url: string; username: string; environment: string; created_at: string
+  retention_keep_last: number; retention_protect: string
 }
 
 export default async function RegistriesPage() {
@@ -12,7 +13,7 @@ export default async function RegistriesPage() {
   if (session.user?.role !== 'admin' && session.user?.role !== 'super_admin') redirect('/dashboard')
 
   const registries = JSON.parse(JSON.stringify(
-    db.prepare('SELECT id, name, url, username, environment, created_at FROM registries ORDER BY created_at DESC').all()
+    db.prepare('SELECT id, name, url, username, environment, retention_keep_last, retention_protect, created_at FROM registries ORDER BY created_at DESC').all()
   )) as Registry[]
 
   return (

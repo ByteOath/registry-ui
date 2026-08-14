@@ -95,6 +95,9 @@ cp .env.example .env.local
 npm install
 npm run dev
 # → http://localhost:3000
+
+npm test      # node --test — pure unit tests, no DB or network
+npm run build # required before every commit that touches src/
 ```
 
 SQLite DB is created at `./data/registry-ui.db` on first run. The admin user is seeded automatically from `ADMIN_USERNAME` / `ADMIN_PASSWORD`.
@@ -109,6 +112,8 @@ SQLite DB is created at `./data/registry-ui.db` on first run. The admin user is 
 | `ADMIN_PASSWORD` | No | Admin password seeded on first run (default: `admin`) |
 | `APP_SECRET` | **Yes** (prod) | Session encryption key — must be 32+ chars — `openssl rand -hex 32` |
 | `DB_PATH` | No | SQLite path — auto-defaults to `/data/registry-ui.db` in production, `./data/registry-ui.db` in dev |
+| `RETENTION_AUTO` | No | `false` disables the background retention sweep started in `src/instrumentation.ts` |
+| `RETENTION_INTERVAL_HOURS` | No | Sweep interval, default `24`. The first sweep runs one interval after boot, never at boot |
 
 > `APP_SECRET` defaults to a hardcoded fallback in development but **must** be set in production. If it changes, all existing sessions are invalidated.
 
@@ -129,7 +134,8 @@ src/
 │   │   │   ├── [id]/route.ts           PUT (update), DELETE — admin only
 │   │   │   └── check/route.ts          POST — ping registry + get repo count
 │   │   ├── registry/[id]/
-│   │   │   ├── delete/route.ts         DELETE — remove tag by manifest digest
+│   │   │   ├── delete/route.ts         DELETE — remove one tag by digest, or a batch of tags
+│   │   │   ├── retention/run/route.ts  POST — run the retention sweep for one registry
 │   │   │   └── tag-detail/route.ts     GET  — fetch manifest + config blob for a tag
 │   │   └── users/
 │   │       ├── route.ts                GET (list), POST (create) — admin only
@@ -143,11 +149,14 @@ src/
 │   │   │       ├── tag/page.tsx        Tag detail standalone page (?image=&tag=)
 │   │   │       └── image/[...name]/
 │   │   │           ├── page.tsx        Tag list (sortable: created/name/size, latest badge)
+│   │   │           ├── tag-list.tsx             Tag rows + bulk selection (client)
 │   │   │           ├── tag-detail-drawer.tsx   Lazy detail drawer (client)
 │   │   │           ├── sort-select.tsx          Sort control (client)
 │   │   │           └── delete-tag-button.tsx    Delete with confirm (client)
+│   │   ├── deleted/                    Deleted-tags audit log (+ registry/image filter)
+│   │   ├── docs/                       Built-in manual and FAQ
 │   │   └── admin/
-│   │       ├── registries/             Registry CRUD + connectivity test
+│   │       ├── registries/             Registry CRUD + connectivity test + retention policy
 │   │       └── users/                  User management + role assignment
 │   └── login/
 ├── components/
@@ -163,8 +172,15 @@ src/
     ├── db.ts                           SQLite singleton, auto-migrate, admin seed
     ├── auth.ts                         getSession, requireAuth, requireAdmin helpers
     ├── registry-client.ts              Docker Registry V2 API client
-    └── utils.ts                        cn, formatBytes, formatDate, formatRelativeDate, apiError
+    ├── deleted-log.ts                  recordDeletion — single write point for the audit log
+    ├── retention.ts                    Retention sweep + parseRetention payload validation
+    ├── tag-match.ts                    Protected-tag glob matching (dependency-free, unit-tested)
+    ├── tag-match.test.ts               node:test — `npm test`
+    └── utils.ts                        cn, formatBytes, formatDate, formatRelativeDate, apiError, PublicError
 ```
+
+`src/instrumentation.ts` is the only background process: Next calls `register()` once per server
+boot, and it schedules `runRetentionAll()` on an interval.
 
 ---
 
@@ -183,7 +199,9 @@ All Docker Registry V2 API calls go through here. Never call the registry direct
 | `getTags(config, name)` | `GET /v2/{name}/tags/list` | Auto-paginates |
 | `getManifest(config, name, ref)` | `GET /v2/{name}/manifests/{ref}` | Returns digest, size, layers, mediaType, configDigest |
 | `getImageConfig(config, name, digest)` | `GET /v2/{name}/blobs/{digest}` | Returns arch, OS, created, labels, env, ports, history |
-| `deleteManifest(config, name, digest)` | `DELETE /v2/{name}/manifests/{digest}` | Requires delete enabled on registry |
+| `deleteManifest(config, name, digest)` | `DELETE /v2/{name}/manifests/{digest}` | Throws `PublicError` — 405 → "Delete not enabled on registry…", 404 → already deleted, else the status |
+| `listTagsWithMeta(config, name, withCreated?)` | tags + manifests (+ config blobs) | Shared by the tag page and the retention sweep; `withCreated` costs one extra request per tag |
+| `sortTagsByCreated(list)` | — | Newest build first, undated tags last, `latest` pinned to the top |
 
 **Auth handling:** Every request first attempts Basic auth (if credentials present). On `401`, the `WWW-Authenticate` header is parsed — if it's a Bearer challenge, a token is fetched from the realm URL and the request is retried once with `Authorization: Bearer <token>`.
 
@@ -211,8 +229,23 @@ const row = db.prepare('SELECT * FROM registries WHERE id = ?').get(id)
 **Schema:**
 
 ```sql
-registries (id, name, url, username, password, environment, created_at)
-users      (id, username, password_hash, role, created_at)
+registries   (id, name, url, username, password, environment,
+              retention_keep_last, retention_protect, created_at)
+users        (id, username, password_hash, role, created_at)
+deleted_tags (id, registry_id, image, tag, digest, size, reason, deleted_by, deleted_at)
+```
+
+`registries.retention_keep_last` is `0` when cleanup is off (the default, including for every
+pre-existing row after migration); `retention_protect` is a comma-separated pattern list.
+`deleted_tags` has no foreign key on purpose — the log outlives a removed registry, so the page
+resolves the registry name with a `LEFT JOIN` and falls back to `registry #N (removed)`.
+`deleted_at` is stored as ISO-8601 with a `Z` suffix, because `datetime('now')` is UTC but parses
+as local time in JavaScript.
+
+Columns are added with the tolerated-failure pattern already used for `environment`:
+
+```ts
+try { db.exec('ALTER TABLE registries ADD COLUMN retention_keep_last INTEGER NOT NULL DEFAULT 0') } catch {}
 ```
 
 ### `src/lib/auth.ts`
@@ -224,6 +257,36 @@ requireAdmin()    // → throws 'UNAUTHORIZED' or 'FORBIDDEN' if not admin
 ```
 
 Errors thrown by `requireAuth`/`requireAdmin` are caught by `apiError()` in `utils.ts` and returned as `401`/`403` JSON responses.
+
+### Error handling — `apiError` and `PublicError`
+
+`apiError(e)` is the single catch-all every route uses. It maps, in order:
+
+1. `'UNAUTHORIZED'` / `'FORBIDDEN'` sentinels → `401` / `403`
+2. `PublicError` → its own message and status
+3. anything else → `console.error` plus `{ error: 'Internal server error' }`, `500`
+
+`PublicError` exists so operator-actionable failures reach the user without opening the door to
+leaking internals. Throw it only for messages written for a human that contain no response bodies,
+paths or stack data — `deleteManifest` is the reference case. Registry helpers that embed raw
+response bodies (`getCatalog`, `getTags`, `getManifest`) deliberately stay plain `Error`.
+
+### `src/lib/retention.ts`
+
+```ts
+runRetentionForRegistry(id)  // → { deleted, errors } — one registry, used by the API route
+runRetentionAll()            // → void — every registry with retention_keep_last > 0, used by the timer
+parseRetention(keep, protect) // → { keepLast, protect } | null — payload validation for the registry routes
+```
+
+Per image: `listTagsWithMeta(config, image, true)` → `sortTagsByCreated` → drop protected tags
+(`isProtected` from `tag-match.ts`) → delete everything past `keepLast`. A digest is deleted once
+even when several doomed tags share it, and every tag is logged separately. The sweep is N+1 over
+the registry API (`getTags` plus a manifest and a config blob per tag) — fine for tens of images,
+worth a cache before it is pointed at thousands.
+
+Validation lives in `retention.ts` rather than the route file because App Router route modules may
+only export HTTP handlers.
 
 ---
 
@@ -239,7 +302,25 @@ interface Registry {
   username: string                        // empty string if no auth
   password: string                        // stored plaintext — use strong APP_SECRET
   environment: 'production' | 'staging' | 'local'
+  retention_keep_last: number             // 0 = automatic cleanup off
+  retention_protect: string               // "latest, v*, prod-*" — never deleted
   created_at: string                      // ISO datetime
+}
+```
+
+### DeletedTag (SQLite)
+
+```ts
+interface DeletedTag {
+  id: number
+  registry_id: number                     // no FK — may point at a removed registry
+  image: string
+  tag: string
+  digest: string
+  size: number                            // bytes, 0 when unknown
+  reason: 'manual' | 'retention'
+  deleted_by: string                      // username, empty for the automatic sweep
+  deleted_at: string                      // ISO-8601 UTC with Z suffix
 }
 ```
 
@@ -249,7 +330,7 @@ interface Registry {
 interface SessionUser {
   id: number
   username: string
-  role: 'admin' | 'viewer'
+  role: 'super_admin' | 'admin' | 'viewer'
 }
 ```
 
@@ -292,7 +373,8 @@ All routes return JSON. Auth errors return `{ error: "Unauthorized" }` (401) or 
 | `DELETE` | `/api/registries/[id]` | Admin | Delete registry |
 | `POST` | `/api/registries/check` | Admin | Ping registry, return repo count |
 | `GET` | `/api/registry/[id]/tag-detail` | Any | Fetch manifest + config for one tag |
-| `DELETE` | `/api/registry/[id]/delete` | Admin | Delete tag by digest |
+| `DELETE` | `/api/registry/[id]/delete` | Admin | Delete one tag (`{ name, tag, digest }`) or a batch (`{ name, tags: [{ tag, digest, size }] }`, max 100) |
+| `POST` | `/api/registry/[id]/retention/run` | Admin | Run the retention sweep now → `{ deleted, errors }` |
 | `GET` | `/api/users` | Admin | List users |
 | `POST` | `/api/users` | Admin | Create user |
 | `PUT` | `/api/users/[id]` | Admin | Update user / change role |

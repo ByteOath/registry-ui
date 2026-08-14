@@ -1,3 +1,5 @@
+import { PublicError } from './utils'
+
 export interface RegistryConfig {
   url: string
   username?: string
@@ -172,10 +174,66 @@ export async function getImageConfig(
   }
 }
 
+export interface TagMeta {
+  tag: string
+  digest: string | null
+  size: number
+  layers: number
+  mediaType: string | null
+  schemaVersion: number | null
+  configDigest: string | null
+  created: string | null
+}
+
+/**
+ * Lists every tag of an image with its manifest metadata. `withCreated` also pulls the image
+ * config blob for the build date — one extra request per tag.
+ * ponytail: N+1 registry fetches; add a digest->meta cache if catalogs get large.
+ */
+export async function listTagsWithMeta(
+  config: RegistryConfig,
+  name: string,
+  withCreated = false,
+): Promise<TagMeta[]> {
+  const tags = await getTags(config, name)
+  return Promise.all(
+    tags.map(async (tag): Promise<TagMeta> => {
+      try {
+        const manifest = await getManifest(config, name, tag)
+        let created: string | null = null
+        if (withCreated && manifest.configDigest) {
+          try {
+            created = (await getImageConfig(config, name, manifest.configDigest)).created
+          } catch { /* best-effort */ }
+        }
+        return { tag, ...manifest, created }
+      } catch {
+        return { tag, digest: null, size: 0, layers: 0, mediaType: null, schemaVersion: null, configDigest: null, created: null }
+      }
+    }),
+  )
+}
+
+/** Newest build first, tags with no build date last, `latest` always pinned to the top. */
+export function sortTagsByCreated<T extends { tag: string; created: string | null }>(list: T[]): T[] {
+  return [...list].sort((a, b) => {
+    if (a.tag === 'latest') return -1
+    if (b.tag === 'latest') return 1
+    if (!a.created && !b.created) return 0
+    if (!a.created) return 1
+    if (!b.created) return -1
+    return new Date(b.created).getTime() - new Date(a.created).getTime()
+  })
+}
+
 export async function deleteManifest(config: RegistryConfig, name: string, digest: string): Promise<void> {
   const res = await registryFetch(config, `/v2/${name}/manifests/${digest}`, { method: 'DELETE' })
   if (res.status !== 202) {
-    throw new Error(res.status === 405 ? 'Delete not enabled on registry (set REGISTRY_STORAGE_DELETE_ENABLED=true)' : `Delete failed: ${res.status}`)
+    if (res.status === 405) {
+      throw new PublicError('Delete not enabled on registry (set REGISTRY_STORAGE_DELETE_ENABLED=true)', 409)
+    }
+    if (res.status === 404) throw new PublicError('Tag already deleted on the registry', 404)
+    throw new PublicError(`Delete failed: registry returned ${res.status}`, 502)
   }
 }
 
