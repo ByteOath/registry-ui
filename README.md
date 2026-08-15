@@ -42,7 +42,7 @@ A minimal, self-hosted Docker Registry browser. Connect multiple registries, bro
   - Build history (layer-by-layer commands)
 - **Sort tags** — by created date (default), name, or size
 - **Latest badge** — `latest` tag is always visually highlighted and pinned to the top
-- **Delete** — remove image tags by digest directly from the UI (admin only), one at a time or in bulk
+- **Delete** — remove image tags by digest directly from the UI (admin only), one at a time or in bulk via hover-reveal selection
 - **Automatic cleanup** — keep only the newest N tags per image, with protected tag patterns (`latest`, `v*`, `prod-*`)
 - **Deleted-tags log** — separate page listing every removed tag with who deleted it, when, and whether it was manual or automatic
 - **Built-in manual** — how-to guide and FAQ at **Manual** in the sidebar
@@ -134,7 +134,9 @@ Add users at **Admin → Users**. `super_admin` is the bootstrap account seeded 
 
 ## Deleting Tags
 
-Admins get a delete button on every tag, and checkboxes for deleting several at once. Every deletion is recorded on the **Deleted** page — image, tag, digest, size, who did it, and when.
+Admins get a delete button on every tag. For several at once, hover a tag row — its tag icon turns into a checkbox. Ticking one enters selection mode: all checkboxes stay visible and a toolbar appears above the list with **Select all**, the selected count, **Clear**, and **Copy** / **Delete**. Copy puts the full `host/image:tag` reference of every selected tag on the clipboard, one per line. Clearing the last selection leaves selection mode.
+
+Every deletion is recorded on the **Deleted** page — image, tag, digest, size, who did it, and when.
 
 Deletion must be enabled on the registry itself:
 

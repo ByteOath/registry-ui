@@ -149,7 +149,7 @@ src/
 │   │   │       ├── tag/page.tsx        Tag detail standalone page (?image=&tag=)
 │   │   │       └── image/[...name]/
 │   │   │           ├── page.tsx        Tag list (sortable: created/name/size, latest badge)
-│   │   │           ├── tag-list.tsx             Tag rows + bulk selection (client)
+│   │   │           ├── tag-list.tsx             Tag rows + hover-reveal selection, bulk copy/delete (client)
 │   │   │           ├── tag-detail-drawer.tsx   Lazy detail drawer (client)
 │   │   │           ├── sort-select.tsx          Sort control (client)
 │   │   │           └── delete-tag-button.tsx    Delete with confirm (client)

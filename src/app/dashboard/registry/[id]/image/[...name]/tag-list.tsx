@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Tag, Trash2, Loader2 } from 'lucide-react'
+import { Tag, Trash2, Loader2, Copy, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -26,18 +26,20 @@ export interface TagRow {
 interface Props {
   registryId: string
   imageName: string
+  registryHost: string
   tags: TagRow[]
   isAdmin: boolean
   showCreated: boolean
 }
 
-export default function TagList({ registryId, imageName, tags, isAdmin, showCreated }: Props) {
+export default function TagList({ registryId, imageName, registryHost, tags, isAdmin, showCreated }: Props) {
   const router = useRouter()
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
 
   const deletable = tags.filter(t => t.digest)
   const allSelected = deletable.length > 0 && selected.size === deletable.length
+  const selectionMode = selected.size > 0
 
   function toggle(tag: string) {
     setSelected(prev => {
@@ -50,6 +52,15 @@ export default function TagList({ registryId, imageName, tags, isAdmin, showCrea
 
   function toggleAll() {
     setSelected(allSelected ? new Set() : new Set(deletable.map(t => t.tag)))
+  }
+
+  async function handleCopy() {
+    const refs = deletable
+      .filter(t => selected.has(t.tag))
+      .map(t => `${registryHost}/${imageName}:${t.tag}`)
+      .join('\n')
+    await navigator.clipboard.writeText(refs)
+    toast.success(`Copied ${selected.size} image reference${selected.size === 1 ? '' : 's'}`)
   }
 
   async function handleBulkDelete() {
@@ -81,24 +92,42 @@ export default function TagList({ registryId, imageName, tags, isAdmin, showCrea
 
   return (
     <>
-      {isAdmin && deletable.length > 0 && (
+      {isAdmin && selectionMode && (
         <div className="flex items-center justify-between gap-3 px-4 py-2 rounded-lg border bg-muted/30">
-          <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={allSelected}
-              onChange={toggleAll}
-              className="h-3.5 w-3.5 rounded border-input accent-primary cursor-pointer"
-            />
-            {selected.size > 0 ? `${selected.size} selected` : 'Select all'}
-          </label>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleAll}
+                aria-label="Select all tags"
+                className="h-3.5 w-3.5 rounded border-input accent-primary cursor-pointer"
+              />
+              Select all
+            </label>
+            <span className="text-xs text-muted-foreground">{selected.size} selected</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs gap-1.5 text-muted-foreground"
+              onClick={() => setSelected(new Set())}
+            >
+              <X className="h-3 w-3" />
+              Clear
+            </Button>
+          </div>
 
-          {selected.size > 0 && (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={handleCopy}>
+              <Copy className="h-3 w-3" />
+              Copy
+            </Button>
+
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" size="sm" className="h-7 text-xs gap-1.5" disabled={deleting}>
                   {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
-                  Delete selected
+                  Delete
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
@@ -122,7 +151,7 @@ export default function TagList({ registryId, imageName, tags, isAdmin, showCrea
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
-          )}
+          </div>
         </div>
       )}
 
@@ -132,19 +161,26 @@ export default function TagList({ registryId, imageName, tags, isAdmin, showCrea
           return (
             <div
               key={tag}
-              className={`flex items-center justify-between px-4 py-3 rounded-lg border bg-card ${isLatest ? 'border-emerald-500/50 bg-emerald-500/5' : ''}`}
+              className={`group flex items-center justify-between px-4 py-3 rounded-lg border bg-card ${isLatest ? 'border-emerald-500/50 bg-emerald-500/5' : ''}`}
             >
               <div className="flex items-center gap-3 min-w-0">
-                {isAdmin && digest && (
-                  <input
-                    type="checkbox"
-                    checked={selected.has(tag)}
-                    onChange={() => toggle(tag)}
-                    aria-label={`Select ${tag}`}
-                    className="h-3.5 w-3.5 shrink-0 rounded border-input accent-primary cursor-pointer"
-                  />
+                {isAdmin && digest ? (
+                  // Icon and checkbox share one slot: icon by default, checkbox on hover or in selection mode.
+                  <div className="relative h-4 w-4 shrink-0">
+                    <Tag
+                      className={`absolute inset-0 h-4 w-4 transition-opacity ${isLatest ? 'text-emerald-500' : 'text-muted-foreground'} ${selectionMode ? 'opacity-0' : 'opacity-100 group-hover:opacity-0'}`}
+                    />
+                    <input
+                      type="checkbox"
+                      checked={selected.has(tag)}
+                      onChange={() => toggle(tag)}
+                      aria-label={`Select ${tag}`}
+                      className={`absolute inset-0 h-4 w-4 rounded border-input accent-primary cursor-pointer transition-opacity ${selectionMode ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'}`}
+                    />
+                  </div>
+                ) : (
+                  <Tag className={`h-4 w-4 shrink-0 ${isLatest ? 'text-emerald-500' : 'text-muted-foreground'}`} />
                 )}
-                <Tag className={`h-4 w-4 shrink-0 ${isLatest ? 'text-emerald-500' : 'text-muted-foreground'}`} />
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className={`text-sm font-mono font-medium ${isLatest ? 'text-emerald-600 dark:text-emerald-400' : ''}`}>{tag}</span>

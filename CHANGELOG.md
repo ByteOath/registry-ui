@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.0] - 2026-08-15
+
+### Added
+- Selection toolbar on the tag list: selected count, **Select all**, **Clear**, and bulk **Copy** / **Delete** actions
+- Bulk **Copy** puts the full `host/image:tag` reference of every selected tag on the clipboard, one per line
+
+### Changed
+- Tag rows no longer show a permanent checkbox — the tag icon crossfades into a checkbox on row hover, and all checkboxes stay visible once selection mode is entered (deselecting down to zero exits it)
+- Manual always uses the placeholder host `registry.example.com` in its examples instead of the first configured registry's URL
+- Manual and README describe the new hover-reveal selection flow
+
+---
+
 ## [1.1.0] - 2026-08-14
 
 ### Added

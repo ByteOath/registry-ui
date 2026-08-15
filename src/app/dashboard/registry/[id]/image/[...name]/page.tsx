@@ -82,6 +82,7 @@ export default async function ImagePage({ params, searchParams }: {
           <TagList
             registryId={id}
             imageName={imageName}
+            registryHost={registry.url.replace(/^https?:\/\//, '').replace(/\/$/, '')}
             tags={sorted.map(({ tag, digest, size, layers, mediaType, created }) => ({ tag, digest, size, layers, mediaType, created }))}
             isAdmin={isAdmin}
             showCreated={sort === 'created'}

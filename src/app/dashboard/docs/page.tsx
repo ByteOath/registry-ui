@@ -1,4 +1,3 @@
-import db from '@/lib/db'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { AlertTriangle } from 'lucide-react'
@@ -42,11 +41,10 @@ const SECTIONS = [
   ['faq', 'FAQ'],
 ]
 
-export default async function DocsPage() {
-  // Use a real registry host in the examples when one is configured.
-  const first = db.prepare('SELECT url FROM registries ORDER BY id LIMIT 1').get() as { url: string } | undefined
-  const host = first?.url ? first.url.replace(/^https?:\/\//, '').replace(/\/$/, '') : 'registry.example.com'
+// Examples always use a placeholder host, never a configured registry.
+const host = 'registry.example.com'
 
+export default function DocsPage() {
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <div>
@@ -84,7 +82,7 @@ export default async function DocsPage() {
       <Section id="add-registry" title="Connect a registry">
         <ol className="list-decimal pl-5 space-y-1.5">
           <li>Sign in as an admin, then open <span className="text-foreground">Admin → Registries</span>.</li>
-          <li><span className="text-foreground">Add Registry</span> — give it a name, the base URL (for example <span className="font-mono">http://registry:5000</span>), and credentials if the registry requires auth.</li>
+          <li><span className="text-foreground">Add Registry</span> — give it a name, the base URL (for example <span className="font-mono">https://{host}</span>), and credentials if the registry requires auth.</li>
           <li>Pick an environment label: production, staging or local. It only affects the badge colour.</li>
           <li>Hit <span className="text-foreground">Test connection</span> before saving — it calls the catalog endpoint and reports how many images it found.</li>
         </ol>
@@ -151,9 +149,15 @@ docker push ${host}/myapp:latest`}</Code>
 
       <Section id="delete" title="Deleting tags">
         <p>
-          Admins get a trash icon on every tag row, and checkboxes for deleting many at once — tick the
-          tags, then <span className="text-foreground">Delete selected</span>. Every deletion is written
-          to the <span className="text-foreground">Deleted</span> page with who did it and when.
+          Admins get a trash icon on every tag row. For several tags at once, hover a row — its tag icon
+          turns into a checkbox. Ticking one enters selection mode: every checkbox stays visible and a
+          toolbar appears above the list with <span className="text-foreground">Select all</span>, the
+          selected count, <span className="text-foreground">Clear</span>, and{' '}
+          <span className="text-foreground">Copy</span> / <span className="text-foreground">Delete</span>.
+          Copy puts the full <span className="font-mono">{host}/image:tag</span> reference of every
+          selected tag on the clipboard, one per line. Clearing the last selection leaves selection mode.
+          Every deletion is written to the <span className="text-foreground">Deleted</span> page with who
+          did it and when.
         </p>
         <div className="flex items-start gap-2.5 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2.5">
           <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
