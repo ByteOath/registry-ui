@@ -1,4 +1,5 @@
 import { PublicError } from './utils'
+import { pickChild, platformLabels, type IndexEntry } from './manifest-index'
 
 export interface RegistryConfig {
   url: string
@@ -123,7 +124,22 @@ export async function getTags(config: RegistryConfig, name: string): Promise<str
   return tags
 }
 
-export async function getManifest(config: RegistryConfig, name: string, reference: string) {
+export interface ManifestMeta {
+  digest: string | null
+  size: number
+  layers: number
+  mediaType: string | null
+  schemaVersion: number | null
+  configDigest: string | null
+  platforms: string[]
+}
+
+export async function getManifest(
+  config: RegistryConfig,
+  name: string,
+  reference: string,
+  depth = 0,
+): Promise<ManifestMeta> {
   const res = await registryFetch(config, `/v2/${name}/manifests/${reference}`)
   if (res.status !== 200) throw new Error(`Registry error ${res.status}`)
   const manifest = JSON.parse(res.body)
@@ -135,6 +151,27 @@ export async function getManifest(config: RegistryConfig, name: string, referenc
     if (manifest.config?.size) size += manifest.config.size
   }
 
+  // OCI index / Docker manifest list has no layers or config of its own — the real metadata
+  // lives in a child manifest, so resolve one (linux/amd64 preferred) and report its numbers.
+  const children: IndexEntry[] = Array.isArray(manifest.manifests) ? manifest.manifests : []
+  if (children.length > 0 && depth < 2) {
+    const pick = pickChild(children)
+    if (pick?.digest) {
+      try {
+        const child = await getManifest(config, name, pick.digest, depth + 1)
+        return {
+          digest,
+          size: child.size,
+          layers: child.layers,
+          mediaType: manifest.mediaType || null,
+          schemaVersion: manifest.schemaVersion || null,
+          configDigest: child.configDigest,
+          platforms: platformLabels(children),
+        }
+      } catch { /* fall through to index-only metadata */ }
+    }
+  }
+
   return {
     digest,
     size,
@@ -142,6 +179,7 @@ export async function getManifest(config: RegistryConfig, name: string, referenc
     mediaType: manifest.mediaType || null,
     schemaVersion: manifest.schemaVersion || null,
     configDigest: manifest.config?.digest ?? null,
+    platforms: platformLabels(children),
   }
 }
 
@@ -183,12 +221,14 @@ export interface TagMeta {
   schemaVersion: number | null
   configDigest: string | null
   created: string | null
+  platforms: string[]
 }
 
 /**
  * Lists every tag of an image with its manifest metadata. `withCreated` also pulls the image
  * config blob for the build date — one extra request per tag.
- * ponytail: N+1 registry fetches; add a digest->meta cache if catalogs get large.
+ * ponytail: N+1 registry fetches, and a multi-arch tag costs one more to resolve its index;
+ * add a digest->meta cache if catalogs get large.
  */
 export async function listTagsWithMeta(
   config: RegistryConfig,
@@ -208,7 +248,7 @@ export async function listTagsWithMeta(
         }
         return { tag, ...manifest, created }
       } catch {
-        return { tag, digest: null, size: 0, layers: 0, mediaType: null, schemaVersion: null, configDigest: null, created: null }
+        return { tag, digest: null, size: 0, layers: 0, mediaType: null, schemaVersion: null, configDigest: null, created: null, platforms: [] }
       }
     }),
   )

@@ -40,6 +40,8 @@ A minimal, self-hosted Docker Registry browser. Connect multiple registries, bro
   - Environment variables
   - Image labels
   - Build history (layer-by-layer commands)
+  - Platforms of a multi-arch index
+- **Multi-arch aware** — OCI image index and Docker manifest list tags are followed to a child manifest (`linux/amd64` preferred) for size, layers and config, so they show the same detail as single-image tags; buildx attestation entries are ignored
 - **Sort tags** — by created date (default), name, or size
 - **Latest badge** — `latest` tag is always visually highlighted and pinned to the top
 - **Delete** — remove image tags by digest directly from the UI (admin only), one at a time or in bulk via hover-reveal selection

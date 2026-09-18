@@ -11,6 +11,7 @@ import {
   AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { formatBytes, formatRelativeDate } from '@/lib/utils'
+import { manifestKind } from '@/lib/manifest-index'
 import TagDetailDrawer from './tag-detail-drawer'
 import DeleteTagButton from './delete-tag-button'
 
@@ -195,8 +196,11 @@ export default function TagList({ registryId, imageName, registryHost, tags, isA
                   )}
                   <div className="flex items-center gap-2 mt-0.5">
                     {mediaType && (
-                      <span className="text-[10px] text-muted-foreground/60 font-mono hidden sm:inline">
-                        {mediaType.split('.').pop()}
+                      <span
+                        className="text-[10px] text-muted-foreground/60 font-mono hidden sm:inline"
+                        title={mediaType}
+                      >
+                        {manifestKind(mediaType)}
                       </span>
                     )}
                     {showCreated && created && (

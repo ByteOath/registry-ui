@@ -35,9 +35,11 @@ const SECTIONS = [
   ['add-registry', 'Connect a registry'],
   ['push', 'Push an image'],
   ['browse', 'Browse images and tags'],
+  ['manifests', 'Manifest types and multi-arch'],
   ['roles', 'Roles and permissions'],
   ['delete', 'Deleting tags'],
   ['retention', 'Automatic cleanup'],
+  ['upgrade', 'Updating Registry UI'],
   ['faq', 'FAQ'],
 ]
 
@@ -130,6 +132,46 @@ docker push ${host}/myapp:latest`}</Code>
         </p>
       </Section>
 
+      <Section id="manifests" title="Manifest types and multi-arch">
+        <p>
+          The small grey label under a digest is the tail of the tag’s manifest media type. Both
+          formats a registry can hand out are supported:
+        </p>
+        <ul className="list-disc pl-5 space-y-1.5">
+          <li>
+            <span className="font-mono text-foreground">v2+json</span> —{' '}
+            <span className="font-mono">docker.distribution.manifest.v2+json</span>, a single image:
+            one config blob plus its layers. Size and layer count come straight off it.
+          </li>
+          <li>
+            <span className="font-mono text-foreground">v1+json</span> —{' '}
+            <span className="font-mono">oci.image.index.v1+json</span> (or Docker’s{' '}
+            <span className="font-mono">manifest.list.v2+json</span>), an <em>index</em>: a list
+            pointing at one manifest per platform. It carries no layers of its own, which is why an
+            index used to show a blank size and no details.
+          </li>
+        </ul>
+        <p>
+          For an index, Registry UI now follows the list and reads one child manifest —{' '}
+          <span className="font-mono">linux/amd64</span> when the index has it, otherwise the first
+          real platform. Size, layer count, created date, environment, labels and build history all
+          come from that child; the tag keeps the index digest, so deleting still removes the whole
+          index. Every platform in the index is listed in the detail drawer.
+        </p>
+        <p>
+          Attestation entries that <span className="font-mono">docker buildx</span> adds (platform{' '}
+          <span className="font-mono">unknown/unknown</span>) are ignored — they are signatures and
+          SBOMs, not runnable images.
+        </p>
+        <p>
+          A multi-arch index is what you get from <span className="font-mono">docker buildx</span>;
+          a plain <span className="font-mono">docker build</span> push produces the single-image
+          form:
+        </p>
+        <Code>{`docker buildx build --platform linux/amd64,linux/arm64 \\
+  -t ${host}/myapp:1.0.0 --push .`}</Code>
+      </Section>
+
       <Section id="roles" title="Roles and permissions">
         <div className="space-y-2">
           <div className="flex items-start gap-3">
@@ -199,6 +241,44 @@ docker push ${host}/myapp:latest`}</Code>
           same sweep on demand. Everything it removes lands on the{' '}
           <span className="text-foreground">Deleted</span> page marked <span className="font-mono">auto</span>.
         </p>
+      </Section>
+
+      <Section id="upgrade" title="Updating Registry UI">
+        <p>
+          Registry UI ships as <span className="font-mono">byteoath/registry-ui</span>. Pulling a
+          newer image is safe: users, registry connections and the deleted-tags log live in the
+          SQLite file on the <span className="font-mono">/data</span> volume, not in the image.
+        </p>
+        <p>Docker Compose — pull, recreate, done:</p>
+        <Code>{`docker compose pull
+docker compose up -d`}</Code>
+        <p>
+          Plain <span className="font-mono">docker run</span> — pull the new image, drop the old
+          container, start it again with the same volume and environment:
+        </p>
+        <Code>{`docker pull byteoath/registry-ui:latest
+docker stop registry-ui && docker rm registry-ui
+docker run -d --name registry-ui \\
+  -p 3000:3000 \\
+  -v registry-ui-data:/data \\
+  -e ADMIN_USERNAME=admin \\
+  -e ADMIN_PASSWORD=changeme \\
+  -e APP_SECRET=your-random-secret-here \\
+  byteoath/registry-ui:latest`}</Code>
+        <p>
+          To pin a version instead of tracking <span className="font-mono">latest</span>, swap the
+          tag — <span className="font-mono">byteoath/registry-ui:1.2.0</span> — and bump it when you
+          choose to. Check what is running with:
+        </p>
+        <Code>{`docker inspect --format '{{index .Config.Image}}' registry-ui`}</Code>
+        <div className="flex items-start gap-2.5 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2.5">
+          <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+          <span className="text-xs">
+            Keep the <span className="font-mono">/data</span> volume and the same{' '}
+            <span className="font-mono">APP_SECRET</span> across upgrades. Losing the volume loses
+            your accounts and registry connections; changing the secret signs everyone out.
+          </span>
+        </div>
       </Section>
 
       <Section id="faq" title="FAQ">

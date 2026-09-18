@@ -109,6 +109,7 @@ export default async function TagDetailPage({
           <MetaRow label="Schema Version" value={manifest.schemaVersion != null ? String(manifest.schemaVersion) : null} />
           <MetaRow label="Size" value={manifest.size ? formatBytes(manifest.size) : null} />
           <MetaRow label="Layers" value={String(manifest.layers)} />
+          {manifest.platforms.length > 0 && <MetaRow label="Platforms" value={manifest.platforms.join(', ')} mono />}
           {imageConfig?.created && <MetaRow label="Created" value={formatDate(imageConfig.created)} />}
           {imageConfig?.author && <MetaRow label="Author" value={imageConfig.author} />}
         </CardContent>

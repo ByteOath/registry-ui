@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.1] - 2026-09-18
+
+### Added
+- **Platforms** row in the tag detail drawer and on the tag page, listing every platform in a multi-arch index
+- Manual: **Manifest types and multi-arch** and **Updating Registry UI** sections
+
+### Changed
+- Manifest label under each tag now reads `oci index`, `oci`, `manifest list`, `docker v2` or `docker v1` instead of the ambiguous media-type tail — every OCI type ended in `v1+json`; the full media type is in the tooltip
+
+### Fixed
+- OCI image index / Docker manifest list tags showed no size, no layer count, no created date and an empty detail drawer — the index is now followed to a child manifest (`linux/amd64` preferred) for its metadata, while the tag keeps the index digest so deletion is unchanged
+- `docker buildx` attestation entries (`unknown/unknown`) are no longer treated as platforms
+- Automatic cleanup ranked multi-arch tags last because they had no created date, so it deleted the newest builds first; they are now dated and sorted correctly
+- Sorting tags by size put every multi-arch tag at the bottom with size 0
+
+### Security
+- Child manifest digests returned by a registry are validated as `algo:hex` before being used in a request path
+
+---
+
 ## [1.2.0] - 2026-08-15
 
 ### Added

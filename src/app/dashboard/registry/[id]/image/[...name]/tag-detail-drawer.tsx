@@ -18,6 +18,7 @@ interface TagDetails {
     mediaType: string | null
     schemaVersion: string | null
     configDigest: string | null
+    platforms?: string[]
   }
   imageConfig: ImageConfig | null
   configError: string | null
@@ -106,6 +107,16 @@ export default function TagDetailDrawer({ registryId, imageName, tag }: Props) {
                 <MetaRow label="Schema Version" value={manifest?.schemaVersion != null ? String(manifest.schemaVersion) : null} />
                 <MetaRow label="Size" value={manifest?.size ? formatBytes(manifest.size) : null} />
                 <MetaRow label="Layers" value={manifest?.layers ? String(manifest.layers) : null} />
+                {manifest?.platforms && manifest.platforms.length > 0 && (
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Platforms</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {manifest.platforms.map(p => (
+                        <Badge key={p} variant="outline" className="font-mono text-xs">{p}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {imageConfig?.created && <MetaRow label="Created" value={formatDate(imageConfig.created)} />}
                 {imageConfig?.author && <MetaRow label="Author" value={imageConfig.author} />}
               </Section>

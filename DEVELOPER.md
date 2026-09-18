@@ -176,6 +176,8 @@ src/
     ├── retention.ts                    Retention sweep + parseRetention payload validation
     ├── tag-match.ts                    Protected-tag glob matching (dependency-free, unit-tested)
     ├── tag-match.test.ts               node:test — `npm test`
+    ├── manifest-index.ts               OCI index / manifest list helpers: pickChild, platformLabels, isDigest, manifestKind (pure, unit-tested)
+    ├── manifest-index.test.ts          node:test — `npm test`
     └── utils.ts                        cn, formatBytes, formatDate, formatRelativeDate, apiError, PublicError
 ```
 
@@ -197,7 +199,7 @@ All Docker Registry V2 API calls go through here. Never call the registry direct
 | `pingRegistry(config)` | `GET /v2/` | Returns `true` for 200 or 401 |
 | `getCatalog(config)` | `GET /v2/_catalog` | Auto-paginates via `Link` header |
 | `getTags(config, name)` | `GET /v2/{name}/tags/list` | Auto-paginates |
-| `getManifest(config, name, ref)` | `GET /v2/{name}/manifests/{ref}` | Returns digest, size, layers, mediaType, configDigest |
+| `getManifest(config, name, ref)` | `GET /v2/{name}/manifests/{ref}` | Returns digest, size, layers, mediaType, configDigest, platforms. An OCI index / manifest list is resolved to a child manifest (one extra request) |
 | `getImageConfig(config, name, digest)` | `GET /v2/{name}/blobs/{digest}` | Returns arch, OS, created, labels, env, ports, history |
 | `deleteManifest(config, name, digest)` | `DELETE /v2/{name}/manifests/{digest}` | Throws `PublicError` — 405 → "Delete not enabled on registry…", 404 → already deleted, else the status |
 | `listTagsWithMeta(config, name, withCreated?)` | tags + manifests (+ config blobs) | Shared by the tag page and the retention sweep; `withCreated` costs one extra request per tag |
@@ -211,11 +213,32 @@ All Docker Registry V2 API calls go through here. Never call the registry direct
 |-------------|----------------------|-------|
 | `vnd.docker.distribution.manifest.v2+json` | ✓ | Standard single-platform image |
 | `vnd.oci.image.manifest.v1+json` | ✓ | OCI equivalent |
-| `vnd.docker.distribution.manifest.list.v2+json` | ✗ | Multi-arch list — no config blob |
-| `vnd.oci.image.index.v1+json` | ✗ | OCI index — no config blob |
+| `vnd.docker.distribution.manifest.list.v2+json` | ✓ (resolved) | Multi-arch list — resolved to a child manifest |
+| `vnd.oci.image.index.v1+json` | ✓ (resolved) | OCI index — resolved to a child manifest |
 | `vnd.docker.distribution.manifest.v1+json` | ✗ | Legacy v1 — no config blob |
 
-> If using `docker/build-push-action@v6`, set `provenance: false` in your workflow. Without it, single-platform images are wrapped in an OCI image index, making the config blob inaccessible.
+**Index resolution.** An index (`manifests[]`, no `layers`) carries no size, layers or config of its
+own. `getManifest` detects one, picks a child via `pickChild()` in `src/lib/manifest-index.ts`
+(`linux/amd64` first, else the first runnable platform; `unknown/unknown` buildx attestation entries
+are filtered out) and re-enters itself on that child digest — `depth < 2` caps the recursion. The
+returned object keeps the **index's** digest, mediaType and schemaVersion, takes `size`, `layers`
+and `configDigest` from the child, and adds `platforms: string[]` (e.g. `["linux/amd64",
+"linux/arm64"]`) listing every runnable platform. Any failure resolving the child falls back to
+index-only metadata. A single-image manifest takes the unchanged path — `manifests` is absent, so
+nothing extra is fetched.
+
+`platforms` is part of `ManifestMeta` and `TagMeta`; it is `[]` for non-index manifests, deduped
+(Windows lists one entry per OS build), and rendered as badges in the tag detail drawer and as a row
+on the tag page.
+
+A child digest comes from the registry's own reply and is interpolated into a URL path, so
+`pickChild()` drops any entry whose digest is not `algo:hex` (`isDigest()`). `manifestKind()` maps a
+media type to the short label shown under each tag — the raw types all end in `v1+json`/`v2+json`,
+so the tail alone cannot tell an OCI index from a plain OCI manifest.
+
+> With `docker/build-push-action@v6`, single-platform images are wrapped in an OCI image index
+> unless `provenance: false` is set. That still works — the index is resolved — but it costs one
+> extra manifest request per tag.
 
 ### `src/lib/db.ts`
 
